@@ -1,0 +1,5 @@
+{
+    "rust-analyzer.linkedProjects": [
+        "./pqueue_server/Cargo.toml"
+    ]
+}

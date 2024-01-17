@@ -10,5 +10,5 @@ resolver = "2"
 
 [workspace.dependencies]
 chrono = { version = "~0.4", features = ["clock", "std"] }
-tokio = {version = "~1", features = ["rt-multi-thread", "net", "sync", "macros", "io-util", "time"] }
+tokio = {version = "~1", features = ["rt-multi-thread", "net", "sync", "macros", "io-util", "io-std", "time"] }
 clap = "~4.4"

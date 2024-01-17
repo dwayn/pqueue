@@ -1,76 +1,63 @@
-use clap::{Arg, Command as ClapCommand, value_parser};
-use tokio::{net::TcpStream, io::{AsyncWriteExt as _, AsyncReadExt as _}};
+use tokio::{io::{self, AsyncWriteExt, AsyncBufReadExt as _}, net::TcpStream, select};
+use clap::{Arg, Command, ArgAction};
 
 #[tokio::main]
 async fn main() {
-    let matches = ClapCommand::new("PQueue Client")
-        .version("1.0")
-        .author("Your Name")
-        .about("Client for PQueue Server")
-        .arg(Arg::new("host")
-            .long("host")
-            .default_value("localhost")
-            .help("Server host address"))
-        .arg(Arg::new("port")
-            .long("port")
-            .default_value("8002")
-            .help("Server port"))
-        .subcommand(ClapCommand::new("update")
-            .about("Update an item's score")
-            .arg(Arg::new("item_id").required(true))
-            .arg(Arg::new("value").value_parser(value_parser!(i64)).required(true)))
-        .subcommand(ClapCommand::new("next").about("Get the next item"))
-        .subcommand(ClapCommand::new("peek").about("Peek at the next item"))
-        .subcommand(ClapCommand::new("score")
-            .about("Get an item's score")
-            .arg(Arg::new("item_id").required(true)))
-        .subcommand(ClapCommand::new("info").about("Get server info"))
+    let matches = Command::new("PQueue Interactive Client")
+        .arg(Arg::new("host").long("host").default_value("localhost"))
+        .arg(Arg::new("port").long("port").default_value("8002"))
+        .arg(Arg::new("debug").short('d').long("debug").help("Output extra debugging info to stdout").action(ArgAction::SetTrue))
         .get_matches();
 
-    let server_address = format!(
-        "{}:{}",
-        matches.get_one::<String>("host").unwrap(),
-        matches.get_one::<String>("port").unwrap()
-    );
+    let host = matches.get_one::<String>("host").unwrap();
+    let port = matches.get_one::<String>("port").unwrap();
+    let debug = matches.get_flag("debug");
+    let server_address = format!("{}:{}", host, port);
 
-    match matches.subcommand() {
-        Some(("update", sub_m)) => {
-            let item_id = sub_m.get_one::<String>("item_id").unwrap();
-            let value = sub_m.get_one::<i64>("value").unwrap();
-            let command = format!("UPDATE {} {}", item_id, value);
-            send_command(&server_address, &command).await.unwrap();
-        },
-        Some(("next", _)) => {
-            send_command(&server_address, "NEXT").await.unwrap();
-        },
-        Some(("peek", _)) => {
-            send_command(&server_address, "PEEK").await.unwrap();
-        },
-        Some(("score", sub_m)) => {
-            let item_id = sub_m.get_one::<String>("item_id").unwrap();
-            let command = format!("SCORE {}", item_id);
-            send_command(&server_address, &command).await.unwrap();
-        },
-        Some(("info", _)) => {
-            send_command(&server_address, "INFO").await.unwrap();
-        },
-        _ => eprintln!("Invalid command"),
-    }
-}
+    let mut stream = TcpStream::connect(server_address).await.unwrap();
+    // let (mut reader, mut writer) = stream.split();
 
-use tokio::time::{timeout, Duration};
+    let mut stdin = io::BufReader::new(io::stdin()).lines();
 
-async fn send_command(server_address: &str, command: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let mut stream = TcpStream::connect(server_address).await?;
-    stream.write_all(command.as_bytes()).await?;
-    stream.write_all(b"\r\n").await?;
+    let (reader, writer) = stream.split();
+    let mut reader = io::BufReader::new(reader).lines();
+    let mut writer = io::BufWriter::new(writer);
+    let mut stdout = io::stdout();
 
-    let mut response = String::new();
+    loop {
+        select! {
+            command = stdin.next_line() => {
+                let command = command.unwrap();
 
-    // Set a timeout for the read operation
-    let duration = Duration::from_millis(1000);  // Set to 5 seconds, adjust as needed
-    match timeout(duration, stream.read_to_string(&mut response)).await {
-        Ok(_) => Ok(response),
-        Err(_) => Ok(response),
+                if let Some(command) = command {
+                    let command = command.trim();
+                    if !command.is_empty() {
+                        if debug { println!("read command: {}", command); }
+
+                        writer.write_all(command.as_bytes()).await.unwrap();
+                        writer.write_all(b"\r\n").await.unwrap();
+                        writer.flush().await.unwrap();
+                    }
+                } else {
+                    // if user sends ctrl + d or an EOF is streamed in over stdin, the stdin reader will have
+                    // a None value and we can break out
+                    return;
+                }
+            }
+            response = reader.next_line() => {
+                let response = response.unwrap();
+                if let Some(response) = response {
+                    if debug { println!("received response: {}", response); }
+
+                    stdout.write_all(&response.as_bytes()).await.unwrap();
+                    stdout.write_all(b"\n").await.unwrap();
+                    stdout.flush().await.unwrap();
+                } else {
+                    // If we get an EOF or the socket is disconnected, flow ends up here and we can break out
+                    return;
+                }
+
+            }
+        }
     }
 }

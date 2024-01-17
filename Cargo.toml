@@ -9,6 +9,7 @@ resolver = "2"
 
 
 [workspace.dependencies]
+atty = "~0.2"
 chrono = { version = "~0.4", features = ["clock", "std"] }
 tokio = {version = "~1", features = ["rt-multi-thread", "net", "sync", "macros", "io-util", "io-std", "time"] }
 clap = "~4.4"

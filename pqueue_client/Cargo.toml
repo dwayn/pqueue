@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+atty = { workspace = true }
 clap = { workspace = true }
-pqueue = { path = "../pqueue" }
 tokio = { workspace = true }
+uuid = "1.6.1"

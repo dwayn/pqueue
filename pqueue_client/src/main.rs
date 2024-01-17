@@ -19,12 +19,19 @@ async fn main() {
 
     let mut stdin = io::BufReader::new(io::stdin()).lines();
 
+    let is_interactive = atty::is(atty::Stream::Stdin);
+
     let (reader, writer) = stream.split();
     let mut reader = io::BufReader::new(reader).lines();
     let mut writer = io::BufWriter::new(writer);
     let mut stdout = io::stdout();
 
     loop {
+        if is_interactive {
+            print!("pqueue::{}:{}> ", host, port);
+            io::stdout().flush().await.unwrap(); // Ensure the prompt is displayed immediately
+        }
+
         select! {
             command = stdin.next_line() => {
                 let command = command.unwrap();

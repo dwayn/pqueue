@@ -3,6 +3,7 @@ mod protocol;
 use clap::{Arg, Command as ClapCommand, ArgAction};
 use tokio::{net::{TcpListener, TcpStream}, io::{AsyncWriteExt as _, AsyncReadExt as _}};
 use std::sync::Arc;
+use uuid::Uuid;
 
 use protocol::*;
 use pqueue::PQueue;
@@ -60,6 +61,8 @@ async fn main() {
 
 
 async fn handle_connection(mut socket: TcpStream, pqueue: Arc<PQueue<String>>, debug: bool) {
+    let client_id = Uuid::new_v4();
+    if debug { println!("[{}] client connected", client_id)}
     let mut buffer = Vec::new();
     let mut char_buffer = [0; 1];
 
@@ -75,18 +78,18 @@ async fn handle_connection(mut socket: TcpStream, pqueue: Arc<PQueue<String>>, d
                     // Convert buffer to string
                     let command_string = String::from_utf8_lossy(&buffer);
 
-                    if debug { println!("rcv: {}", &command_string); }
+                    if debug { println!("[{}] rcv: {}", client_id, &command_string); }
                     // Process the command
                     let command = Command::from(command_string.as_ref());
                     let result = process_command(command, &pqueue);
 
                     let resp = result.to_string();
 
-                    if debug { println!("snd: {}", &resp); }
+                    if debug { println!("[{}]snd: {}", client_id, &resp); }
 
                     // Send response
                     if let Err(e) = socket.write_all(resp.as_bytes()).await {
-                        println!("Failed to write to socket: {}", e);
+                        println!("[{}] Failed to write to socket: {}", client_id, e);
                         return;
                     }
 
@@ -97,9 +100,8 @@ async fn handle_connection(mut socket: TcpStream, pqueue: Arc<PQueue<String>>, d
                     buffer.push(char_buffer[0]);
                 }
             }
-            Err(e) => {
-                if debug { println!("Failed to read from socket: {}", e); }
-
+            Err(_) => {
+                if debug { println!("[{}] client disconnected", client_id); }
                 return;
             }
         }

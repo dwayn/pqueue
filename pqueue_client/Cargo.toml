@@ -9,4 +9,3 @@ edition = "2021"
 atty = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true }
-uuid = "1.6.1"

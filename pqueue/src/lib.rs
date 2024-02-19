@@ -3,6 +3,88 @@ use std::sync::{Arc, Mutex};
 use std::hash::Hash;
 use chrono::{NaiveDateTime, Duration, Utc};
 
+// Priority queue wrapper with internal synchronization using Arc and Mutex for thread safety
+// You can clone this and pass it to multiple threads to share the same internal queue. Cloning
+// will not copy the data, but instead, each cloned instance will point to the same internal queue.
+pub struct PQueue<T>
+where
+    T: Eq + Hash + Clone,
+{
+    queue: Arc<Mutex<PriorityQueue<T>>>,
+}
+
+impl<T> Default for PQueue<T>
+where
+    T: Eq + Hash + Clone,
+ {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> Clone for PQueue<T>
+where
+    T: Eq + Hash + Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            queue: self.queue.clone()
+        }
+    }
+}
+
+impl<T> PQueue<T>
+where
+    T: Eq + Hash + Clone,
+{
+    pub fn new() -> Self {
+        Self {
+            queue: Arc::new(Mutex::new(PriorityQueue {
+                scores: BTreeMap::new(),
+                items: HashMap::new(),
+                stats: PQueueStatsTracker {
+                    start_time: Utc::now().naive_utc(),
+                    updates: 0,
+                    items: 0,
+                    pools: 0,
+                },
+            }))
+        }
+    }
+
+    pub fn update(&self, item: T, new_score: i64) {
+        let mut queue = self.queue.lock().unwrap();
+        queue.update(Arc::new(item), new_score);
+    }
+
+    pub fn peek(&self) -> Option<T> {
+        let queue = self.queue.lock().unwrap();
+        queue.peek().map(|arc_item| (*arc_item).clone())
+    }
+
+    pub fn next(&self) -> Option<T> {
+        let mut queue = self.queue.lock().unwrap();
+        queue.next().map(|arc_item| Arc::try_unwrap(arc_item).unwrap_or_else(|arc| (*arc).clone()))
+    }
+
+    pub fn score(&self, item: &T) -> Option<i64> {
+        let queue = self.queue.lock().unwrap();
+        queue.score(&Arc::new(item.clone()))
+    }
+
+    pub fn stats(&self) -> PQueueStats {
+        let queue = self.queue.lock().unwrap();
+        queue.stats.clone().into()
+    }
+}
+
+/// Statistics for the priority queue, returned by the `stats` method
+///
+/// uptime: The time since the priority queue was instantiated
+/// version: The version of the priority queue lib
+/// updates: The count of update calls made to the queue since it was started
+/// items: The count of items currently in the queue
+/// pools: The count of separate score pools in the queue (a pool is just a set of items with the same score)
 #[derive(Clone, Debug)]
 pub struct PQueueStats {
     pub uptime: Duration,
@@ -105,78 +187,14 @@ where
     }
 }
 
-
-// Type alias for the thread-safe priority queue
-pub struct PQueue<T>
-where
-    T: Eq + Hash + Clone,
-{
-    queue: Arc<Mutex<PriorityQueue<T>>>,
-}
-
-impl<T> Default for PQueue<T>
-where
-    T: Eq + Hash + Clone,
- {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 pub trait PQueueOperations<T> {
     fn new() -> Self;
     fn update(&self, item: T, new_score: i64);
     fn peek(&self) -> Option<T>;
     fn next(&self) -> Option<T>;
     fn score(&self, item: &T) -> Option<i64>;
-    fn stats(&self) -> PQueueStats;}
-
-
-impl <T>PQueue<T>
-where
-    T: Eq + Hash + Clone,
-{
-    pub fn new() -> Self {
-        Self {
-            queue: Arc::new(Mutex::new(PriorityQueue {
-                scores: BTreeMap::new(),
-                items: HashMap::new(),
-                stats: PQueueStatsTracker {
-                    start_time: Utc::now().naive_utc(),
-                    updates: 0,
-                    items: 0,
-                    pools: 0,
-                },
-            }))
-        }
-    }
-
-    pub fn update(&self, item: T, new_score: i64) {
-        let mut queue = self.queue.lock().unwrap();
-        queue.update(Arc::new(item), new_score);
-    }
-
-    pub fn peek(&self) -> Option<T> {
-        let queue = self.queue.lock().unwrap();
-        queue.peek().map(|arc_item| (*arc_item).clone())
-    }
-
-    pub fn next(&self) -> Option<T> {
-        let mut queue = self.queue.lock().unwrap();
-        queue.next().map(|arc_item| Arc::try_unwrap(arc_item).unwrap_or_else(|arc| (*arc).clone()))
-    }
-
-    pub fn score(&self, item: &T) -> Option<i64> {
-        let queue = self.queue.lock().unwrap();
-        queue.score(&Arc::new(item.clone()))
-    }
-
-    pub fn stats(&self) -> PQueueStats {
-        let queue = self.queue.lock().unwrap();
-        queue.stats.clone().into()
-    }
+    fn stats(&self) -> PQueueStats;
 }
-
 
 
 #[cfg(test)]
@@ -255,10 +273,13 @@ mod tests {
     #[test]
     fn test_complex_scenario() {
         let queue = PQueue::<String>::new();
+        let queue2 = queue.clone();
         queue.update("item1".to_string(), 10);
         queue.update("item2".to_string(), 15);
-        queue.update("item3".to_string(), 22);
-        queue.update("item4".to_string(), 15);
+        // ensure that queue and it clone share the same internal queue by adding an item to queue2
+        // and checking if it comes back when we peek from queue
+        queue2.update("item3".to_string(), 22);
+        queue2.update("item4".to_string(), 15);
         queue.update("item1".to_string(), 6); // Increment item1's score
         assert_eq!(queue.peek(), Some("item3".to_string())); // "item3" should have the highest score
         queue.next(); // Remove "item3"
@@ -269,12 +290,5 @@ mod tests {
         assert_eq!(queue.peek(), Some("item4".to_string())); // Now "item4" is at the front of the queue
 
     }
-
-
-
-
-
-
-
 
 }

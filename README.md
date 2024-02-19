@@ -11,9 +11,9 @@ PQueue can handle any type `T` that implements `Eq`, `Hash`, and `Clone`, and wh
 will take ownership of the item, wrap it in an `Arc<T>` and use these references all throughout the implementation of the
 queue. Note that the queue generally will not need to clone an item that is added to the or popped off, but if you `PEEK`
 at the first item in the queue, it will clone that item to return it, and when calling `SCORE`, it will clone the item you
-pass in to use it to look it up in the item index.
+pass in to use it to find the item in the internal index.
 
-Included in this is a PQueue server and CLI interactive client implementation for a priority queue that just queues
+Included in this repo is a PQueue server and CLI interactive client implementation for a priority queue that just queues
 string identifiers with some score. This implements all of the operations that can be done on a priority queue with a
 simple interface to serve as a straightforward example of how to use a `PQueue` (or if you just need a standalone
 priority queueing daemon for strings, you can just use these binaries as is).
@@ -45,16 +45,19 @@ impl PartialEq for MyType {
 ```
 
 ### Sharing a PQueue Across Multiple Threads
-When sharing a PQueue for use in multiple threads, you can wrap the PQueue in an Arc and clone the reference to pass to
-each of the threads. The internals of the queue have the needed mutexes to ensure thread safety.
+When sharing a PQueue for use in multiple threads, all you need to do is clone the PQueue object and
+you will get a new PQueue object that holds a reference to the same internal queue. The internals of
+of the Pqueue have the necessary mutexes and managed references that are needed for safety across threads
 ```
-    let pqueue = Arc::new(PQueue::<String>::new()); // Replace String with your item type
+    let pqueue = PQueue::<String>::new(); // Replace String with your item type
 
     loop {
         let (socket, _) = listener.accept().await.unwrap();
         let pqueue_clone = pqueue.clone();
 
         tokio::spawn(async move {
+            // This thread has a clone of the pqueue object that accesses the same internal priority
+            // queue that pqueue holds
             handle_connection(socket, pqueue_clone, debug).await;
         });
     }

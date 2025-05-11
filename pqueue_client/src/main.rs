@@ -1,12 +1,22 @@
-use tokio::{io::{self, AsyncWriteExt, AsyncBufReadExt as _}, net::TcpStream, select};
-use clap::{Arg, Command, ArgAction};
+use clap::{Arg, ArgAction, Command};
+use tokio::{
+    io::{self, AsyncBufReadExt as _, AsyncWriteExt},
+    net::TcpStream,
+    select,
+};
 
 #[tokio::main]
 async fn main() {
     let matches = Command::new("PQueue Interactive Client")
         .arg(Arg::new("host").long("host").default_value("localhost"))
         .arg(Arg::new("port").long("port").default_value("8002"))
-        .arg(Arg::new("debug").short('d').long("debug").help("Output extra debugging info to stdout").action(ArgAction::SetTrue))
+        .arg(
+            Arg::new("debug")
+                .short('d')
+                .long("debug")
+                .help("Output extra debugging info to stdout")
+                .action(ArgAction::SetTrue),
+        )
         .get_matches();
 
     let host = matches.get_one::<String>("host").unwrap();

@@ -1,7 +1,7 @@
+use chrono::{Duration, NaiveDateTime, Utc};
 use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
 use std::hash::Hash;
-use chrono::{NaiveDateTime, Duration, Utc};
+use std::sync::{Arc, Mutex};
 
 // Priority queue wrapper with internal synchronization using Arc and Mutex for thread safety
 // You can clone this and pass it to multiple threads to share the same internal queue. Cloning
@@ -16,7 +16,7 @@ where
 impl<T> Default for PQueue<T>
 where
     T: Eq + Hash + Clone,
- {
+{
     fn default() -> Self {
         Self::new()
     }
@@ -28,7 +28,7 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            queue: self.queue.clone()
+            queue: self.queue.clone(),
         }
     }
 }
@@ -48,7 +48,7 @@ where
                     items: 0,
                     pools: 0,
                 },
-            }))
+            })),
         }
     }
 
@@ -59,21 +59,27 @@ where
 
     pub fn peek(&self) -> Option<T> {
         let queue = self.queue.lock().unwrap();
+
         queue.peek().map(|arc_item| (*arc_item).clone())
     }
 
     pub fn next(&self) -> Option<T> {
         let mut queue = self.queue.lock().unwrap();
-        queue.next().map(|arc_item| Arc::try_unwrap(arc_item).unwrap_or_else(|arc| (*arc).clone()))
+
+        queue
+            .next()
+            .map(|arc_item| Arc::try_unwrap(arc_item).unwrap_or_else(|arc| (*arc).clone()))
     }
 
     pub fn score(&self, item: &T) -> Option<i64> {
         let queue = self.queue.lock().unwrap();
+
         queue.score(&Arc::new(item.clone()))
     }
 
     pub fn stats(&self) -> PQueueStats {
         let queue = self.queue.lock().unwrap();
+
         queue.stats.clone().into()
     }
 }
@@ -91,7 +97,7 @@ pub struct PQueueStats {
     pub version: String,
     pub updates: i64,
     pub items: i64,
-    pub pools: i64
+    pub pools: i64,
 }
 
 impl From<PQueueStatsTracker> for PQueueStats {
@@ -132,6 +138,7 @@ where
 {
     pub fn update(&mut self, item: Arc<T>, new_score: i64) {
         let mut new_score = new_score;
+
         self.stats.updates += 1;
         if let Some(&current_score) = self.items.get(&item) {
             self.remove_item(&item, current_score);
@@ -148,7 +155,10 @@ where
     }
 
     pub fn peek(&self) -> Option<Arc<T>> {
-        self.scores.iter().next_back().and_then(|(_, items)| items.iter().next().cloned())
+        self.scores
+            .iter()
+            .next_back()
+            .and_then(|(_, items)| items.iter().next().cloned())
     }
 
     pub fn next(&mut self) -> Option<Arc<T>> {
@@ -195,7 +205,6 @@ pub trait PQueueOperations<T> {
     fn score(&self, item: &T) -> Option<i64>;
     fn stats(&self) -> PQueueStats;
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -288,7 +297,5 @@ mod tests {
         assert_eq!(queue.peek(), Some("item2".to_string())); // Now "item2" should be at the top since it got score 15 before item4 did
         queue.next(); // remove "item2"
         assert_eq!(queue.peek(), Some("item4".to_string())); // Now "item4" is at the front of the queue
-
     }
-
 }

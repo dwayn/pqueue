@@ -2,7 +2,6 @@ use std::fmt;
 
 use pqueue::PQueueStats;
 
-
 #[derive(Clone, Debug)]
 pub enum Command {
     Update { item_id: String, value: i64 },
@@ -14,19 +13,19 @@ pub enum Command {
     Help,
 }
 
-
 impl From<&str> for Command {
     fn from(s: &str) -> Self {
         let parts: Vec<&str> = s.split_whitespace().collect();
         match parts.as_slice() {
-            [command, item_id, value] if command.eq_ignore_ascii_case("UPDATE") => {
-                value.parse().map(|val| Command::Update {
+            [command, item_id, value] if command.eq_ignore_ascii_case("UPDATE") => value
+                .parse()
+                .map(|val| Command::Update {
                     item_id: item_id.to_string(),
                     value: val,
-                }).unwrap_or(Command::Error {
-                    msg: "Invalid value for UPDATE".to_string(),
                 })
-            },
+                .unwrap_or(Command::Error {
+                    msg: "Invalid value for UPDATE".to_string(),
+                }),
             [command] if command.eq_ignore_ascii_case("NEXT") => Command::Next,
             [command] if command.eq_ignore_ascii_case("PEEK") => Command::Peek,
             [command, item_id] if command.eq_ignore_ascii_case("SCORE") => Command::Score {
@@ -34,7 +33,9 @@ impl From<&str> for Command {
             },
             [command] if command.eq_ignore_ascii_case("INFO") => Command::Info,
             [command] if command.eq_ignore_ascii_case("INFO") => Command::Help,
-            _ => Command::Error { msg: "Invalid command or arguments".to_string() },
+            _ => Command::Error {
+                msg: "Invalid command or arguments".to_string(),
+            },
         }
     }
 }

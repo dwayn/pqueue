@@ -52,9 +52,10 @@ where
         }
     }
 
-    pub fn update(&self, item: T, new_score: i64) {
+    pub fn update(&self, item: T, new_score: i64) -> (Option<i64>, i64) {
         let mut queue = self.queue.lock().unwrap();
-        queue.update(Arc::new(item), new_score);
+
+        queue.update(Arc::new(item), new_score)
     }
 
     pub fn peek(&self) -> Option<T> {
@@ -136,11 +137,14 @@ impl<T> PriorityQueue<T>
 where
     T: Eq + Hash + Clone,
 {
-    pub fn update(&mut self, item: Arc<T>, new_score: i64) {
+    pub fn update(&mut self, item: Arc<T>, new_score: i64) -> (Option<i64>, i64) {
+        let mut old_score = None;
         let mut new_score = new_score;
 
         self.stats.updates += 1;
         if let Some(&current_score) = self.items.get(&item) {
+            old_score = Some(current_score);
+
             self.remove_item(&item, current_score);
             new_score += current_score;
         } else {
@@ -152,6 +156,8 @@ where
             self.stats.pools += 1;
         }
         self.scores.entry(new_score).or_default().push_back(item);
+
+        (old_score, new_score)
     }
 
     pub fn peek(&self) -> Option<Arc<T>> {
@@ -230,9 +236,15 @@ mod tests {
     #[test]
     fn test_update_existing_item() {
         let queue = PQueue::<String>::new();
-        queue.update("item1".to_string(), 10);
-        queue.update("item1".to_string(), 20);
-        assert_eq!(queue.score(&"item1".to_string()), Some(30));
+        let (old_score, new_score) = queue.update("item1".to_string(), 10);
+        assert_eq!(old_score, None);
+        assert_eq!(new_score, 10);
+
+        let (old_score, new_score) = queue.update("item1".to_string(), 20);
+        assert_eq!(old_score, Some(10));
+        assert_eq!(new_score, 30);
+
+        assert_eq!(queue.score(&"item1".to_string()), Some(new_score));
     }
 
     #[test]

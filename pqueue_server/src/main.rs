@@ -1,13 +1,15 @@
 mod protocol;
 
-use clap::{Arg, Command as ClapCommand, ArgAction};
-use tokio::{net::{TcpListener, TcpStream}, io::{AsyncWriteExt as _, AsyncReadExt as _}};
+use clap::{Arg, ArgAction, Command as ClapCommand};
 use std::sync::Arc;
+use tokio::{
+    io::{AsyncReadExt as _, AsyncWriteExt as _},
+    net::{TcpListener, TcpStream},
+};
 use uuid::Uuid;
 
-use protocol::*;
 use pqueue::PQueue;
-
+use protocol::*;
 
 #[tokio::main]
 async fn main() {
@@ -39,10 +41,10 @@ async fn main() {
         )
         .get_matches();
 
-        let host = matches.get_one::<String>("host").unwrap();
-        let port = matches.get_one::<String>("port").unwrap();
-        let debug = matches.get_flag("debug");
-        let address = format!("{}:{}", host, port);
+    let host = matches.get_one::<String>("host").unwrap();
+    let port = matches.get_one::<String>("port").unwrap();
+    let debug = matches.get_flag("debug");
+    let address = format!("{}:{}", host, port);
 
     let listener = TcpListener::bind(&address).await.unwrap();
     println!("Server running on {}", address);
@@ -59,10 +61,11 @@ async fn main() {
     }
 }
 
-
 async fn handle_connection(mut socket: TcpStream, pqueue: Arc<PQueue<String>>, debug: bool) {
     let client_id = Uuid::new_v4();
-    if debug { println!("[{}] client connected", client_id)}
+    if debug {
+        println!("[{}] client connected", client_id)
+    }
     let mut buffer = Vec::new();
     let mut char_buffer = [0; 1];
 
@@ -78,14 +81,18 @@ async fn handle_connection(mut socket: TcpStream, pqueue: Arc<PQueue<String>>, d
                     // Convert buffer to string
                     let command_string = String::from_utf8_lossy(&buffer);
 
-                    if debug { println!("[{}] rcv: {}", client_id, &command_string); }
+                    if debug {
+                        println!("[{}] rcv: {}", client_id, &command_string);
+                    }
                     // Process the command
                     let command = Command::from(command_string.as_ref());
                     let result = process_command(command, &pqueue);
 
                     let resp = result.to_string();
 
-                    if debug { println!("[{}]snd: {}", client_id, &resp); }
+                    if debug {
+                        println!("[{}]snd: {}", client_id, &resp);
+                    }
 
                     // Send response
                     if let Err(e) = socket.write_all(resp.as_bytes()).await {
@@ -101,7 +108,9 @@ async fn handle_connection(mut socket: TcpStream, pqueue: Arc<PQueue<String>>, d
                 }
             }
             Err(_) => {
-                if debug { println!("[{}] client disconnected", client_id); }
+                if debug {
+                    println!("[{}] client disconnected", client_id);
+                }
                 return;
             }
         }
@@ -113,24 +122,22 @@ fn process_command(command: Command, pqueue: &Arc<PQueue<String>>) -> Response {
         Command::Update { item_id, value } => {
             pqueue.update(item_id.into(), value);
             Response::Ok
-        },
-        Command::Next => {
-            pqueue.next().map_or(Response::Item("-1".to_string()), |item| Response::Item(item))
-        },
-        Command::Peek => {
-            pqueue.peek().map_or(Response::Item("-1".to_string()), |item| Response::Item(item))
-        },
-        Command::Score { item_id } => {
-            pqueue.score(&item_id).map_or(Response::Score(-1), Response::Score)
-        },
-        Command::Info => {
-            Response::Stats(pqueue.stats())
-        },
-        Command::Error { msg } => {
-            Response::Error(msg)
-        },
-        Command::Help => {
-            Response::Help
-        },
+        }
+        Command::Next => pqueue
+            .next()
+            .map_or(Response::Item("-1".to_string()), |item| {
+                Response::Item(item)
+            }),
+        Command::Peek => pqueue
+            .peek()
+            .map_or(Response::Item("-1".to_string()), |item| {
+                Response::Item(item)
+            }),
+        Command::Score { item_id } => pqueue
+            .score(&item_id)
+            .map_or(Response::Score(-1), Response::Score),
+        Command::Info => Response::Stats(pqueue.stats()),
+        Command::Error { msg } => Response::Error(msg),
+        Command::Help => Response::Help,
     }
 }

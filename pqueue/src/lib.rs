@@ -3,9 +3,10 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 
-// Priority queue wrapper with internal synchronization using Arc and Mutex for thread safety
-// You can clone this and pass it to multiple threads to share the same internal queue. Cloning
-// will not copy the data, but instead, each cloned instance will point to the same internal queue.
+/// Priority queue wrapper with internal synchronization using Arc and Mutex for thread safety.
+///
+/// You can clone this and pass it to multiple threads to share the same internal queue. Cloning
+/// will not copy the data, but instead, each cloned instance will point to the same internal queue.
 pub struct PQueue<T>
 where
     T: Eq + Hash + Clone,
@@ -52,18 +53,31 @@ where
         }
     }
 
+    /// Update the score of an item in the queue or adds it if it doesn't yet
+    /// exist.
+    ///
+    /// Returns a tuple of the old score (`None` if the item didn't yet exist)
+    /// and the new score.
     pub fn update(&self, item: T, new_score: i64) -> (Option<i64>, i64) {
         let mut queue = self.queue.lock().unwrap();
 
         queue.update(Arc::new(item), new_score)
     }
 
+    /// Peek at the highest scoring item in the queue.
+    ///
+    /// Returns the item with the highest score, or `None` if the queue is
+    /// empty.
     pub fn peek(&self) -> Option<T> {
         let queue = self.queue.lock().unwrap();
 
         queue.peek().map(|arc_item| (*arc_item).clone())
     }
 
+    /// Remove and return the highest scoring item from the queue.
+    ///
+    /// Returns the item with the highest score, or `None` if the queue is
+    /// empty.
     pub fn next(&self) -> Option<T> {
         let mut queue = self.queue.lock().unwrap();
 
@@ -72,12 +86,19 @@ where
             .map(|arc_item| Arc::try_unwrap(arc_item).unwrap_or_else(|arc| (*arc).clone()))
     }
 
+    /// Get the current score of an item in the queue.
+    ///
+    /// Returns the score of the item, or `None` if the item doesn't exist in
+    /// the queue.
     pub fn score(&self, item: &T) -> Option<i64> {
         let queue = self.queue.lock().unwrap();
 
         queue.score(&Arc::new(item.clone()))
     }
 
+    /// Get the statistics of the priority queue.
+    ///
+    /// Returns the statistics of the priority queue.
     pub fn stats(&self) -> PQueueStats {
         let queue = self.queue.lock().unwrap();
 
@@ -85,19 +106,19 @@ where
     }
 }
 
-/// Statistics for the priority queue, returned by the `stats` method
-///
-/// uptime: The time since the priority queue was instantiated
-/// version: The version of the priority queue lib
-/// updates: The count of update calls made to the queue since it was started
-/// items: The count of items currently in the queue
-/// pools: The count of separate score pools in the queue (a pool is just a set of items with the same score)
+/// Statistics for the priority queue, returned by the `stats` method.
 #[derive(Clone, Debug)]
 pub struct PQueueStats {
+    /// The time since the priority queue was instantiated
     pub uptime: Duration,
+    /// The version of the priority queue lib
     pub version: String,
+    /// The count of update calls made to the queue since it was started
     pub updates: i64,
+    /// The count of items currently in the queue
     pub items: i64,
+    /// The count of separate score pools in the queue (a pool is just a set
+    /// of items with the same score)
     pub pools: i64,
 }
 
@@ -113,17 +134,21 @@ impl From<PQueueStatsTracker> for PQueueStats {
     }
 }
 
-// Statistics tracker for the priority queue
+/// Statistics tracker for the priority queue
 #[derive(Clone, Debug)]
 struct PQueueStatsTracker {
+    /// The time the priority queue was instantiated
     start_time: NaiveDateTime,
+    /// The count of update calls made to the queue since it was started
     updates: i64,
+    /// The count of items currently in the queue
     items: i64,
+    /// The count of separate score pools in the queue (a pool is just a set
+    /// of items with the same score)
     pools: i64,
 }
 
-// The core priority queue structure
-
+/// The core priority queue structure
 struct PriorityQueue<T>
 where
     T: Eq + Hash,
@@ -137,6 +162,11 @@ impl<T> PriorityQueue<T>
 where
     T: Eq + Hash + Clone,
 {
+    /// Update the score of an item in the queue or adds it if it doesn't yet
+    /// exist.
+    ///
+    /// Returns a tuple of the old score (`None` if the item didn't yet exist)
+    /// and the new score.
     pub fn update(&mut self, item: Arc<T>, new_score: i64) -> (Option<i64>, i64) {
         let mut old_score = None;
         let mut new_score = new_score;
@@ -160,6 +190,10 @@ where
         (old_score, new_score)
     }
 
+    /// Peek at the highest scoring item in the queue.
+    ///
+    /// Returns the item with the highest score, or `None` if the queue is
+    /// empty.
     pub fn peek(&self) -> Option<Arc<T>> {
         self.scores
             .iter()
@@ -167,6 +201,10 @@ where
             .and_then(|(_, items)| items.iter().next().cloned())
     }
 
+    /// Remove and return the highest scoring item from the queue.
+    ///
+    /// Returns the item with the highest score, or `None` if the queue is
+    /// empty.
     pub fn next(&mut self) -> Option<Arc<T>> {
         if let Some((&score, items)) = self.scores.iter_mut().next_back() {
             let item = items.pop_front();
@@ -188,6 +226,10 @@ where
         }
     }
 
+    /// Get the current score of an item in the queue.
+    ///
+    /// Returns the score of the item, or `None` if the item doesn't exist in
+    /// the queue.
     pub fn score(&self, item: &Arc<T>) -> Option<i64> {
         self.items.get(item).cloned()
     }

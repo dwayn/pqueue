@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Run cargo test
+        run: cargo test --workspace --all-features
+
+      - name: Run cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: Run cargo clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Update Cargo.toml version
+        run: |
+          sed -i 's/^version = ".*"/version = "${{ steps.version.outputs.VERSION }}"/' pqueue/Cargo.toml
+
+      - name: Verify version update
+        run: |
+          echo "Updated version in Cargo.toml:"
+          grep '^version = ' pqueue/Cargo.toml
+
+      - name: Publish to crates.io
+        run: cargo publish --manifest-path pqueue/Cargo.toml
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ steps.version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          body: |
+            Release version ${{ steps.version.outputs.VERSION }} of concurrent-pqueue.
+            
+            ## What's Changed
+            
+            See the [CHANGELOG](https://github.com/willbuckner/pqueue/blob/main/README.md#changelog) for details.
+            
+            ## Installation
+            
+            ```toml
+            [dependencies]
+            concurrent-pqueue = "${{ steps.version.outputs.VERSION }}"
+            ```

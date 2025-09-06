@@ -18,6 +18,7 @@ impl<T> Default for PQueue<T>
 where
     T: Eq + Hash + Clone,
 {
+    /// Creates a new empty priority queue using default initialization.
     fn default() -> Self {
         Self::new()
     }
@@ -27,6 +28,8 @@ impl<T> Clone for PQueue<T>
 where
     T: Eq + Hash + Clone,
 {
+    /// Creates a shallow clone that shares the same internal queue.
+    /// Multiple cloned instances will operate on the same underlying data.
     fn clone(&self) -> Self {
         Self {
             queue: self.queue.clone(),
@@ -38,6 +41,7 @@ impl<T> PQueue<T>
 where
     T: Eq + Hash + Clone,
 {
+    /// Creates a new empty priority queue with thread-safe `Arc<Mutex<T>>` wrapper.
     pub fn new() -> Self {
         Self {
             queue: Arc::new(Mutex::new(PriorityQueue {
@@ -83,6 +87,7 @@ where
 
         queue
             .next()
+            // Attempt to unwrap Arc, fallback to clone if other references exist
             .map(|arc_item| Arc::try_unwrap(arc_item).unwrap_or_else(|arc| (*arc).clone()))
     }
 
@@ -93,6 +98,7 @@ where
     pub fn score(&self, item: &T) -> Option<i64> {
         let queue = self.queue.lock().unwrap();
 
+        // Create Arc wrapper for lookup (HashMap key consistency)
         queue.score(&Arc::new(item.clone()))
     }
 
@@ -123,6 +129,7 @@ pub struct PQueueStats {
 }
 
 impl From<PQueueStatsTracker> for PQueueStats {
+    /// Converts internal stats tracker to public stats format with computed uptime.
     fn from(value: PQueueStatsTracker) -> Self {
         Self {
             uptime: Utc::now().naive_utc() - value.start_time,
@@ -148,13 +155,19 @@ struct PQueueStatsTracker {
     pools: i64,
 }
 
-/// The core priority queue structure
+/// The core priority queue structure using a dual-index design:
+/// - BTreeMap for ordered access to scores (highest first)
+/// - HashMap for O(1) item-to-score lookups
+/// Items with the same score are stored in a VecDeque for FIFO ordering.
 struct PriorityQueue<T>
 where
     T: Eq + Hash,
 {
+    /// Maps scores to queues of items (BTreeMap keeps scores sorted)
     scores: BTreeMap<i64, VecDeque<Arc<T>>>,
+    /// Maps items to their current scores for fast lookups
     items: HashMap<Arc<T>, i64>,
+    /// Internal statistics tracking
     stats: PQueueStatsTracker,
 }
 
@@ -176,12 +189,14 @@ where
             old_score = Some(current_score);
 
             self.remove_item(&item, current_score);
+            // Additive scoring: new score is added to existing score
             new_score += current_score;
         } else {
             self.stats.items += 1;
         }
 
         self.items.insert(item.clone(), new_score);
+        // Track pool creation: a pool is a set of items with the same score
         if !self.scores.contains_key(&new_score) {
             self.stats.pools += 1;
         }
@@ -209,6 +224,7 @@ where
         if let Some((&score, items)) = self.scores.iter_mut().next_back() {
             let item = items.pop_front();
             if let Some(item) = item {
+                // Clean up empty pools to maintain accurate pool count
                 if items.is_empty() {
                     self.scores.remove(&score);
                     self.stats.pools -= 1;
@@ -217,6 +233,7 @@ where
                 self.stats.items -= 1;
                 Some(item)
             } else {
+                // Edge case: empty pool cleanup
                 self.scores.remove(&score);
                 self.stats.pools -= 1;
                 None
@@ -234,9 +251,12 @@ where
         self.items.get(item).cloned()
     }
 
+    /// Removes an item from a specific score pool and cleans up empty pools.
+    /// Used internally when updating existing items to new scores.
     fn remove_item(&mut self, item: &Arc<T>, score: i64) {
         if let Some(items) = self.scores.get_mut(&score) {
             items.retain(|i| i != item);
+            // Clean up empty pools to prevent memory leaks and maintain accurate stats
             if items.is_empty() {
                 self.scores.remove(&score);
                 self.stats.pools -= 1;
@@ -245,12 +265,20 @@ where
     }
 }
 
+/// Trait defining the core operations for a priority queue.
+/// This abstraction allows for different implementations while maintaining a consistent API.
 pub trait PQueueOperations<T> {
+    /// Creates a new empty priority queue.
     fn new() -> Self;
+    /// Updates an item's score (additive) or adds it if it doesn't exist.
     fn update(&self, item: T, new_score: i64);
+    /// Returns the highest-scoring item without removing it.
     fn peek(&self) -> Option<T>;
+    /// Removes and returns the highest-scoring item.
     fn next(&self) -> Option<T>;
+    /// Gets the current score for a specific item.
     fn score(&self, item: &T) -> Option<i64>;
+    /// Returns current queue statistics.
     fn stats(&self) -> PQueueStats;
 }
 

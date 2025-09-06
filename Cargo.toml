@@ -5,7 +5,7 @@ members = [
     "pqueue_client"
 ]
 resolver = "2"
-
+package.version = "0.3.0"
 
 
 [workspace.dependencies]

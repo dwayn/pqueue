@@ -5,6 +5,9 @@ use tokio::{
     select,
 };
 
+/// Interactive TCP client for the PQueue server.
+/// Supports both interactive mode (with prompts) and non-interactive mode (for scripting).
+/// Uses async I/O to handle simultaneous user input and server responses.
 #[tokio::main]
 async fn main() {
     let matches = Command::new("PQueue Interactive Client")
@@ -42,6 +45,7 @@ async fn main() {
             io::stdout().flush().await.unwrap(); // Ensure the prompt is displayed immediately
         }
 
+        // Coordinate stdin input and server responses concurrently
         select! {
             command = stdin.next_line() => {
                 let command = command.unwrap();
@@ -56,8 +60,7 @@ async fn main() {
                         writer.flush().await.unwrap();
                     }
                 } else {
-                    // if user sends ctrl + d or an EOF is streamed in over stdin, the stdin reader will have
-                    // a None value and we can break out
+                    // EOF on stdin (Ctrl+D or piped input end) signals client termination
                     return;
                 }
             }
@@ -70,7 +73,7 @@ async fn main() {
                     stdout.write_all(b"\n").await.unwrap();
                     stdout.flush().await.unwrap();
                 } else {
-                    // If we get an EOF or the socket is disconnected, flow ends up here and we can break out
+                    // EOF on socket indicates server disconnection
                     return;
                 }
 

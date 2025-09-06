@@ -187,6 +187,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
+name = "concurrent-pqueue"
+version = "0.3.0"
+dependencies = [
+ "chrono",
+]
+
+[[package]]
 name = "core-foundation-sys"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -335,15 +342,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8afb450f006bf6385ca15ef45d71d2288452bc3683ce2e2cacc0d18e4be60b58"
 
 [[package]]
-name = "pqueue"
-version = "0.1.0"
-dependencies = [
- "chrono",
-]
-
-[[package]]
 name = "pqueue_client"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "atty",
  "clap",
@@ -352,10 +352,10 @@ dependencies = [
 
 [[package]]
 name = "pqueue_server"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "clap",
- "pqueue",
+ "concurrent-pqueue",
  "tokio",
  "uuid",
 ]

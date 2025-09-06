@@ -1,64 +1,256 @@
-# Rust Priority Queue library
+# concurrent-pqueue - Rust Priority Queue Library
 
-A threadsafe, heap based, priority queue with the ability to update the priority of items already in the queue.
-Internally, it uses a btree for handling managing the prioritization of items, and a hashmap for indexing the items. The
-items themselves are all passed by reference using an Arc to avoid needing to clone the items as they are added to the
-queue.
+[![Crates.io](https://img.shields.io/crates/v/concurrent-pqueue.svg)](https://crates.io/crates/concurrent-pqueue)
+[![Documentation](https://docs.rs/concurrent-pqueue/badge.svg)](https://docs.rs/concurrent-pqueue)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.txt)
 
-# Implementation
+A high-performance, thread-safe priority queue implementation in Rust with support for dynamic priority updates. Designed for scenarios where you need to efficiently manage prioritized items with the ability to update priorities after insertion.
 
-PQueue can handle any type `T` that implements `Eq`, `Hash`, and `Clone`, and when an item is added to the queue, PQueue
-will take ownership of the item, wrap it in an `Arc<T>` and use these references all throughout the implementation of the
-queue. Note that the queue generally will not need to clone an item that is added to the or popped off, but if you `PEEK`
-at the first item in the queue, it will clone that item to return it, and when calling `SCORE`, it will clone the item you
-pass in to use it to find the item in the internal index.
+## Features
 
-Included in this repo is a PQueue server and CLI interactive client implementation for a priority queue that just queues
-string identifiers with some score. This implements all of the operations that can be done on a priority queue with a
-simple interface to serve as a straightforward example of how to use a `PQueue` (or if you just need a standalone
-priority queueing daemon for strings, you can just use these binaries as is).
+- **Thread-safe**: Built with `Arc<Mutex<T>>` for safe concurrent access across multiple threads
+- **Dynamic priority updates**: Update item priorities after insertion with additive scoring
+- **Efficient dual-index design**: Uses `BTreeMap` for ordered access and `HashMap` for O(1) lookups
+- **Zero-copy cloning**: Clone instances share the same underlying data structure
+- **Statistics tracking**: Built-in performance and usage statistics
+- **Memory efficient**: Uses `Arc<T>` to avoid unnecessary item cloning
+- **FIFO ordering**: Items with equal priority are processed in first-in, first-out order
 
-### Example of Defining a Custom Struct to Use in a PQueue
-Example custom implementations for Hash and Eq, by implementing PartialEq for custom comparison.
+## Quick Start
+
+Add this to your `Cargo.toml`:
+
+```toml
+[dependencies]
+concurrent-pqueue = "0.3.0"
 ```
+
+### Basic Usage
+
+```rust
+use concurrent_pqueue::PQueue;
+
+fn main() {
+    let queue = PQueue::<String>::new();
+
+    // Add items with priorities
+    queue.update("task_1".to_string(), 10);
+    queue.update("task_2".to_string(), 20);
+    queue.update("urgent_task".to_string(), 30);
+
+    // Process highest priority item
+    if let Some(item) = queue.next() {
+        println!("Processing: {}", item); // "urgent_task"
+    }
+
+    // Peek without removing
+    if let Some(item) = queue.peek() {
+        println!("Next item: {}", item); // "task_2"
+    }
+
+    // Update priority (additive)
+    queue.update("task_1".to_string(), 15); // Now has priority 25
+
+    // Check current priority
+    if let Some(score) = queue.score(&"task_1".to_string()) {
+        println!("Current priority: {}", score); // 25
+    }
+}
+```
+
+## Advanced Usage
+
+### Custom Types
+
+PQueue works with any type that implements `Eq`, `Hash`, and `Clone`. Here's an example with a custom struct:
+
+```rust
 use std::hash::Hash;
+use concurrent_pqueue::PQueue;
 
 #[derive(Clone, Debug, Eq)]
-pub struct MyType {
-    id: i32,
+pub struct Task {
+    id: u64,
     name: String,
+    category: String,
 }
 
-// Treats MyType objects as being identified as the same object if their names match
-impl Hash for MyType {
+impl Hash for Task {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
+        self.id.hash(state); // Use ID as the unique identifier
     }
 }
 
-// Treats MyType objects as being equal objects if their names match case insensitively
-impl PartialEq for MyType {
+impl PartialEq for Task {
     fn eq(&self, other: &Self) -> bool {
-        self.name.to_lowercase() == other.name.to_lowercase()
+        self.id == other.id
+    }
+}
+
+fn main() {
+    let queue = PQueue::<Task>::new();
+
+    let task = Task {
+        id: 1,
+        name: "Process data".to_string(),
+        category: "computation".to_string(),
+    };
+
+    queue.update(task, 100);
+
+    if let Some(next_task) = queue.next() {
+        println!("Processing task: {}", next_task.name);
     }
 }
 ```
 
-### Sharing a PQueue Across Multiple Threads
-When sharing a PQueue for use in multiple threads, all you need to do is clone the PQueue object and
-you will get a new PQueue object that holds a reference to the same internal queue. The internals of
-of the Pqueue have the necessary mutexes and managed references that are needed for safety across threads
-```
-    let pqueue = PQueue::<String>::new(); // Replace String with your item type
+### Thread Safety
 
-    loop {
-        let (socket, _) = listener.accept().await.unwrap();
-        let pqueue_clone = pqueue.clone();
+PQueue is designed for concurrent use. Simply clone the queue to share it across threads:
 
-        tokio::spawn(async move {
-            // This thread has a clone of the pqueue object that accesses the same internal priority
-            // queue that pqueue holds
-            handle_connection(socket, pqueue_clone, debug).await;
-        });
-    }
+```rust
+use concurrent_pqueue::PQueue;
+use std::sync::Arc;
+use tokio;
+
+#[tokio::main]
+async fn main() {
+    let queue = PQueue::<String>::new();
+
+    // Producer task
+    let producer_queue = queue.clone();
+    tokio::spawn(async move {
+        for i in 0..10 {
+            producer_queue.update(format!("task_{}", i), i * 10);
+        }
+    });
+
+    // Consumer task
+    let consumer_queue = queue.clone();
+    tokio::spawn(async move {
+        while let Some(item) = consumer_queue.next() {
+            println!("Processing: {}", item);
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+}
 ```
+
+### Monitoring and Statistics
+
+Track queue performance with built-in statistics:
+
+```rust
+use concurrent_pqueue::PQueue;
+
+fn main() {
+    let queue = PQueue::<String>::new();
+
+    queue.update("item1".to_string(), 10);
+    queue.update("item2".to_string(), 20);
+    queue.next();
+
+    let stats = queue.stats();
+    println!("Queue Statistics:");
+    println!("  Uptime: {} seconds", stats.uptime.num_seconds());
+    println!("  Total updates: {}", stats.updates);
+    println!("  Items in queue: {}", stats.items);
+    println!("  Priority pools: {}", stats.pools);
+    println!("  Version: {}", stats.version);
+}
+```
+
+## API Reference
+
+### Core Methods
+
+- `new() -> PQueue<T>` - Creates a new empty priority queue
+- `update(item: T, score: i64) -> (Option<i64>, i64)` - Updates item priority (additive)
+- `next() -> Option<T>` - Removes and returns highest priority item
+- `peek() -> Option<T>` - Returns highest priority item without removing
+- `score(item: &T) -> Option<i64>` - Gets current priority for an item
+- `stats() -> PQueueStats` - Returns queue statistics
+
+### Priority System
+
+- **Additive scoring**: When updating an existing item, the new score is added to the current score
+- **Highest first**: Items with higher scores are processed first
+- **FIFO for ties**: Items with equal priority are processed in insertion order
+
+## Server/Client Implementation
+
+This repository includes a complete TCP server/client implementation demonstrating PQueue usage in a networked environment.
+
+### Running the Server
+
+```bash
+cargo run --bin pqueue_server -- --host 0.0.0.0 --port 8002 --debug
+```
+
+### Running the Client
+
+```bash
+cargo run --bin pqueue_client -- --host localhost --port 8002 --debug
+```
+
+### Protocol Commands
+
+```
+UPDATE <identifier> <score>  # Updates priority (additive)
+NEXT                         # Pops highest priority item
+PEEK                         # Views highest priority item
+SCORE <identifier>           # Gets current priority
+INFO                         # Server statistics
+HELP                         # Command help
+```
+
+## Implementation Details
+
+### Architecture
+
+- **Dual-index design**: `BTreeMap<i64, VecDeque<Arc<T>>>` for ordered priority access + `HashMap<Arc<T>, i64>` for O(1) lookups
+- **Thread safety**: `Arc<Mutex<PriorityQueue<T>>>` wrapper for safe concurrent access
+- **Memory efficiency**: Items stored as `Arc<T>` to minimize cloning
+- **Score pools**: Items with identical priorities grouped in FIFO queues
+
+### Performance Characteristics
+
+- **Insert/Update**: O(log n) average case
+- **Peek**: O(log n) to find highest priority pool, O(1) to access item
+- **Next (pop)**: O(log n) average case
+- **Score lookup**: O(1) hash map access
+- **Space complexity**: O(n) where n is the number of unique items
+
+## Requirements
+
+- **Rust version**: 1.70 or later
+- **Dependencies**: `chrono` for timestamp handling
+
+## Testing
+
+Run the test suite:
+
+```bash
+cargo test --workspace
+```
+
+The library includes comprehensive unit tests covering:
+- Basic queue operations (insert, peek, pop)
+- Priority updates and additive scoring
+- Thread safety scenarios
+- Edge cases (empty queue, duplicate items)
+- Statistics accuracy
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE.txt](LICENSE.txt) file for details.

@@ -23,7 +23,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-concurrent-pqueue = "0.3.0"
+concurrent-pqueue = "0.4.0"
 ```
 
 ### Basic Usage

@@ -2,6 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/concurrent-pqueue.svg)](https://crates.io/crates/concurrent-pqueue)
 [![Documentation](https://docs.rs/concurrent-pqueue/badge.svg)](https://docs.rs/concurrent-pqueue)
+[![CI](https://github.com/dwayn/pqueue/workflows/CI/badge.svg)](https://github.com/dwayn/pqueue/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.txt)
 
 A high-performance, thread-safe priority queue implementation in Rust with support for dynamic priority updates. Designed for scenarios where you need to efficiently manage prioritized items with the ability to update priorities after insertion.

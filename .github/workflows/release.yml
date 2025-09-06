@@ -72,13 +72,13 @@ jobs:
           prerelease: false
           body: |
             Release version ${{ steps.version.outputs.VERSION }} of concurrent-pqueue.
-            
+
             ## What's Changed
-            
-            See the [CHANGELOG](https://github.com/willbuckner/pqueue/blob/main/README.md#changelog) for details.
-            
+
+            See the [CHANGELOG](https://github.com/dwayn/pqueue/blob/main/README.md#changelog) for details.
+
             ## Installation
-            
+
             ```toml
             [dependencies]
             concurrent-pqueue = "${{ steps.version.outputs.VERSION }}"

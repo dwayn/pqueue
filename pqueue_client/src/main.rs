@@ -69,7 +69,7 @@ async fn main() {
                 if let Some(response) = response {
                     if debug { println!("received response: {}", response); }
 
-                    stdout.write_all(&response.as_bytes()).await.unwrap();
+                    stdout.write_all(response.as_bytes()).await.unwrap();
                     stdout.write_all(b"\n").await.unwrap();
                     stdout.flush().await.unwrap();
                 } else {

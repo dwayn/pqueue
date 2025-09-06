@@ -128,7 +128,7 @@ async fn handle_connection(mut socket: TcpStream, pqueue: Arc<PQueue<String>>, d
 fn process_command(command: Command, pqueue: &Arc<PQueue<String>>) -> Response {
     match command {
         Command::Update { item_id, value } => {
-            pqueue.update(item_id.into(), value);
+            pqueue.update(item_id, value);
             Response::Ok
         }
         Command::Next => pqueue

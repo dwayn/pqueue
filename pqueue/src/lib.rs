@@ -158,6 +158,7 @@ struct PQueueStatsTracker {
 /// The core priority queue structure using a dual-index design:
 /// - BTreeMap for ordered access to scores (highest first)
 /// - HashMap for O(1) item-to-score lookups
+///
 /// Items with the same score are stored in a VecDeque for FIFO ordering.
 struct PriorityQueue<T>
 where
